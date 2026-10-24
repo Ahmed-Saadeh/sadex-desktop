@@ -31,7 +31,12 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
+import android.content.ClipboardManager;
+import android.content.ClipData;
+import android.os.Message;
+import androidx.webkit.WebSettingsCompat;
 
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewCompat;
@@ -51,7 +56,9 @@ import java.util.Collections;
 
 public class MainActivity extends Activity {
   static final String HOME = "https://claude.ai/artifact/DMze2Cz16YQRegMRCMWPBC";
-  WebView web;
+  WebView web, popup;
+  FrameLayout root;
+  String lastClip = "";
   ValueCallback<Uri[]> fileCb;
 
   // Runs in every frame: the Claude page, Claude's inner artifact frame and SADEX itself.
@@ -71,44 +78,74 @@ public class MainActivity extends Activity {
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
+    root = new FrameLayout(this);
     web = new WebView(this);
     web.setBackgroundColor(0xFF0A1730);
-    setContentView(web);
+    root.addView(web);
+    setContentView(root);
     immersive();
+    setup(web);
     WebSettings s = web.getSettings();
-    s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
-    s.setMediaPlaybackRequiresUserGesture(false); s.setSupportZoom(false); s.setBuiltInZoomControls(false);
     s.setLoadWithOverviewMode(true); s.setUseWideViewPort(true);
-    s.setUserAgentString(s.getUserAgentString() + " SADEX-Android/" + BuildConfig.VERSION_NAME);
-    CookieManager cm = CookieManager.getInstance(); cm.setAcceptCookie(true); cm.setAcceptThirdPartyCookies(web, true);
     web.addJavascriptInterface(new Bridge(), "SadexAndroid");
     if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
       WebViewCompat.addDocumentStartJavaScript(web, FIT, Collections.singleton("*"));
     }
-    web.setWebViewClient(new WebViewClient() {
-      @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
-        String u = r.getUrl().toString();
-        if (inside(u)) return false;
-        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u))); } catch (Exception e) {}
-        return true;
-      }
-      @Override public void onPageFinished(WebView v, String u) {
-        CookieManager.getInstance().flush();
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) v.evaluateJavascript(FIT, null);
-      }
-    });
-    web.setWebChromeClient(new WebChromeClient() {
-      @Override public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
-        fileCb = cb;
-        try { startActivityForResult(p.createIntent(), 7); } catch (Exception e) { fileCb = null; return false; }
-        return true;
-      }
-    });
     if (b != null) web.restoreState(b); else web.loadUrl(HOME);
     checkUpdate();
   }
 
+  /* Shared settings for the main view and sign-in pop-ups. Google sign-in only works when the app looks like a normal browser. */
+  void setup(final WebView v) {
+    WebSettings s = v.getSettings();
+    s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true); s.setDatabaseEnabled(true);
+    s.setMediaPlaybackRequiresUserGesture(false); s.setSupportZoom(false); s.setBuiltInZoomControls(false);
+    s.setJavaScriptCanOpenWindowsAutomatically(true); s.setSupportMultipleWindows(true);
+    String ua = s.getUserAgentString().replace("; wv)", ")").replaceAll("Version/[0-9.]+ ", "");
+    s.setUserAgentString(ua + " SADEX-Android/" + BuildConfig.VERSION_NAME);
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST))
+      WebSettingsCompat.setRequestedWithHeaderOriginAllowList(s, java.util.Collections.<String>emptySet());
+    CookieManager cm = CookieManager.getInstance(); cm.setAcceptCookie(true); cm.setAcceptThirdPartyCookies(v, true);
+    v.setWebViewClient(new WebViewClient() {
+      @Override public boolean shouldOverrideUrlLoading(WebView w, WebResourceRequest r) { return route(w, r.getUrl().toString()); }
+      @Override public void onPageFinished(WebView w, String u) {
+        CookieManager.getInstance().flush();
+        if (w == web && !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) w.evaluateJavascript(FIT, null);
+      }
+    });
+    v.setWebChromeClient(new WebChromeClient() {
+      @Override public boolean onShowFileChooser(WebView w, ValueCallback<Uri[]> cb, FileChooserParams p) {
+        fileCb = cb;
+        try { startActivityForResult(p.createIntent(), 7); } catch (Exception e) { fileCb = null; return false; }
+        return true;
+      }
+      @Override public boolean onCreateWindow(WebView w, boolean dialog, boolean gesture, Message msg) {
+        closePopup();
+        popup = new WebView(MainActivity.this); popup.setBackgroundColor(0xFFFFFFFF); setup(popup);
+        root.addView(popup, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        ((WebView.WebViewTransport) msg.obj).setWebView(popup); msg.sendToTarget();
+        return true;
+      }
+      @Override public void onCloseWindow(WebView w) { if (w == popup) closePopup(); }
+    });
+  }
+  void closePopup() { if (popup != null) { root.removeView(popup); popup.destroy(); popup = null; } }
+  /* Claude and Google sign-in pages stay inside the app; everything else opens in the phone's browser. */
+  boolean route(WebView w, String u) {
+    if (u.startsWith("intent:")) {
+      try {
+        Intent it = Intent.parseUri(u, Intent.URI_INTENT_SCHEME); String fb = it.getStringExtra("browser_fallback_url");
+        if (fb != null && inside(fb)) { w.loadUrl(fb); return true; }
+        startActivity(it);
+      } catch (Exception e) {}
+      return true;
+    }
+    if (inside(u)) return false;
+    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u))); } catch (Exception e) {}
+    return true;
+  }
   static boolean inside(String u) {
+    if (u.matches("^https://([a-z0-9-]+\\.)*(google\\.[a-z.]+|gstatic\\.com|googleusercontent\\.com|googleapis\\.com|youtube\\.com)(/.*)?$")) return true;
     return u.matches("^https://([a-z0-9-]+\\.)*(claude\\.ai|claudeusercontent\\.com|anthropic\\.com|claude\\.com)(/.*)?$")
       || u.startsWith("https://accounts.google.com/") || u.startsWith("about:") || u.startsWith("blob:") || u.startsWith("data:");
   }
@@ -127,7 +164,24 @@ public class MainActivity extends Activity {
   @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) immersive(); }
   @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); web.saveState(o); }
   @Override protected void onPause() { super.onPause(); CookieManager.getInstance().flush(); }
-  @Override public void onBackPressed() { if (web.canGoBack()) web.goBack(); else super.onBackPressed(); }
+  @Override public void onBackPressed() {
+    if (popup != null) { if (popup.canGoBack()) popup.goBack(); else closePopup(); return; }
+    if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+  }
+  /* Signing in by email: copy the sign-in link from the email, come back to SADEX, and the app offers to open it here. */
+  @Override protected void onResume() { super.onResume(); web.postDelayed(this::checkClip, 600); }
+  void checkClip() {
+    try {
+      ClipboardManager cb = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE); ClipData c = cb.getPrimaryClip();
+      if (c == null || c.getItemCount() == 0) return;
+      CharSequence t = c.getItemAt(0).coerceToText(this); if (t == null) return;
+      final String u = t.toString().trim();
+      if (u.equals(lastClip) || !u.matches("^https://(www\\.)?claude\\.ai/\\S*(magic|login|verify|auth|token)\\S*$")) return;
+      lastClip = u;
+      new AlertDialog.Builder(this).setTitle("Sign in to SADEX").setMessage("Open the sign-in link you copied, here in the SADEX app?")
+        .setPositiveButton("Open", (d, w) -> { closePopup(); web.loadUrl(u); }).setNegativeButton("No", null).show();
+    } catch (Exception e) {}
+  }
   @Override protected void onActivityResult(int req, int res, Intent data) {
     if (req == 7 && fileCb != null) { fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data)); fileCb = null; return; }
     super.onActivityResult(req, res, data);
