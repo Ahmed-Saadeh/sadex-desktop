@@ -1,0 +1,61 @@
+{
+  "name": "sadex-desktop",
+  "productName": "SADEX",
+  "version": "1.1.0",
+  "description": "SADEX \u2014 Formulas. Standards. Control. Desktop window for the live SADEX app.",
+  "author": "Ahmed Saadeh",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64 --publish never",
+    "release": "electron-builder --win nsis --x64 --publish always"
+  },
+  "devDependencies": {
+    "electron": "33.2.0",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.saadeh.sadex",
+    "productName": "SADEX",
+    "copyright": "Ahmed Saadeh",
+    "files": [
+      "main.js",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SADEX",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "SADEX-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Ahmed-Saadeh",
+        "repo": "sadex-desktop",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ahmed-Saadeh/sadex-desktop.git"
+  }
+}

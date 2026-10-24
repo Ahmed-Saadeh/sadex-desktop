@@ -1,0 +1,23 @@
+# Builds SADEX Setup.exe on GitHub's Windows computers and publishes it as a release.
+# Runs when the version in package.json changes on the main branch.
+name: Build SADEX Desktop
+on:
+  push:
+    branches: [main]
+    paths: [package.json, main.js, build/**, .github/workflows/release.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Build and publish installer
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
