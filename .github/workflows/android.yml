@@ -25,7 +25,15 @@ jobs:
           echo "SADEX_VERSION_CODE=${{ github.run_number }}" >> $GITHUB_ENV
       - name: Build APK
         working-directory: android
-        run: gradle --no-daemon assembleRelease
+        run: |
+          set -o pipefail
+          gradle --no-daemon assembleRelease 2>&1 | tee ../build.log
+      - name: Report build error
+        if: failure()
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          { echo '```'; grep -E "error:|ERROR|What went wrong|FAILURE|e: |Caused by|> " build.log | head -60; echo '---'; tail -60 build.log; echo '```'; } > err.md
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@err.md
       - name: Publish release
         env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
         run: |

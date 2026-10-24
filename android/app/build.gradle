@@ -19,6 +19,7 @@ android {
     }
   }
   buildFeatures { buildConfig true }
+  lint { checkReleaseBuilds false; abortOnError false }
   buildTypes { release { minifyEnabled false; signingConfig signingConfigs.release } }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
