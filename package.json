@@ -1,7 +1,7 @@
 {
   "name": "sadex-desktop",
   "productName": "SADEX",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "SADEX \u2014 Formulas. Standards. Control. Desktop window for the live SADEX app.",
   "author": "Ahmed Saadeh",
   "main": "main.js",
@@ -42,7 +42,10 @@
       "shortcutName": "SADEX",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "artifactName": "SADEX-Setup-${version}.${ext}"
+      "artifactName": "SADEX-Setup-${version}.${ext}",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp"
     },
     "publish": [
       {
