@@ -63,21 +63,12 @@ public class MainActivity extends Activity {
 
   // Runs in every frame: the Claude page, Claude's inner artifact frame and SADEX itself.
   // In Claude's frames it makes the SADEX frame fill the whole screen and hides Claude's own toolbar.
-  static final String FIT = "(function(){if(window.__sxa)return;window.__sxa=1;" +
-    "function css(){if(document.getElementById('sxa-css'))return;var s=document.createElement('style');s.id='sxa-css';" +
-    "s.textContent='html.sx-full,html.sx-full body{background:#0a1730!important;overflow:hidden!important}html.sx-full body *{visibility:hidden!important}html.sx-full .sx-anc,html.sx-full iframe.sx-art{visibility:visible!important}" +
-    "html.sx-full .sx-anc{transform:none!important;filter:none!important;contain:none!important;will-change:auto!important;perspective:none!important;backdrop-filter:none!important;clip-path:none!important}" +
-    "html.sx-full iframe.sx-art{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;transform:none!important;z-index:2147483647!important}';" +
-    "(document.head||document.documentElement).appendChild(s)}" +
-    "function fit(){if(document.getElementById('app-data'))return;css();var R=document.documentElement,best=null,ba=0,vw=innerWidth,vh=innerHeight;" +
-    "document.querySelectorAll('iframe').forEach(function(f){var r=f.getBoundingClientRect(),a=r.width*r.height;if(f.classList.contains('sx-art'))a=Math.max(a,vw*vh);if(a>ba){ba=a;best=f}});" +
-    "document.querySelectorAll('iframe.sx-art').forEach(function(f){if(f!==best)f.classList.remove('sx-art')});" +
-    "var ok=best&&ba>vw*vh*0.25,anc=[];if(ok){best.classList.add('sx-art');for(var p=best.parentElement;p&&p!==R;p=p.parentElement)anc.push(p)}" +
-    "document.querySelectorAll('.sx-anc').forEach(function(x){if(anc.indexOf(x)<0)x.classList.remove('sx-anc')});anc.forEach(function(x){x.classList.add('sx-anc')});R.classList.toggle('sx-full',!!ok)}" +
-    "if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fit);else fit();setInterval(fit,700);addEventListener('resize',fit)})();";
+  String FIT = "";
+  String asset(String n) { try (InputStream in = getAssets().open(n)) { java.util.Scanner sc = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A"); return sc.hasNext() ? sc.next() : ""; } catch (Exception e) { return ""; } }
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
+    FIT = asset("fit.js");
     root = new FrameLayout(this);
     web = new WebView(this);
     web.setBackgroundColor(0xFF0A1730);
@@ -110,7 +101,7 @@ public class MainActivity extends Activity {
       @Override public boolean shouldOverrideUrlLoading(WebView w, WebResourceRequest r) { return route(w, r.getUrl().toString()); }
       @Override public void onPageFinished(WebView w, String u) {
         CookieManager.getInstance().flush();
-        if (w == web && !WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) w.evaluateJavascript(FIT, null);
+        if (w == web) w.evaluateJavascript(FIT, null);
       }
     });
     v.setWebChromeClient(new WebChromeClient() {
