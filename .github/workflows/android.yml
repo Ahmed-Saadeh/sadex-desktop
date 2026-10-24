@@ -1,0 +1,35 @@
+# Builds the SADEX Android app (APK) and publishes it as a GitHub release "android-v<version>".
+name: Build SADEX Android
+on:
+  push:
+    branches: [main]
+    paths: [android/**, .github/workflows/android.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.7' }
+      - name: Version
+        id: v
+        run: |
+          V=$(cat android/VERSION)
+          echo "name=$V" >> $GITHUB_OUTPUT
+          echo "SADEX_VERSION_NAME=$V" >> $GITHUB_ENV
+          echo "SADEX_VERSION_CODE=${{ github.run_number }}" >> $GITHUB_ENV
+      - name: Build APK
+        working-directory: android
+        run: gradle --no-daemon assembleRelease
+      - name: Publish release
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "SADEX-${{ steps.v.outputs.name }}.apk"
+          gh release delete "android-v${{ steps.v.outputs.name }}" -y --cleanup-tag || true
+          gh release create "android-v${{ steps.v.outputs.name }}" "SADEX-${{ steps.v.outputs.name }}.apk" --title "SADEX Android ${{ steps.v.outputs.name }}" --notes "SADEX for Android phones and tablets. Open this page on the phone, download the APK and install it." --latest=false
