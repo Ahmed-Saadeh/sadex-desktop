@@ -166,6 +166,15 @@ function wordToPdf(files) {
     });
   });
 }
+// Weather for the clock (Open-Meteo, no key).
+ipcMain.handle('sadex-weather', async (e, city) => {
+  try {
+    const { net } = require('electron');
+    const g = await (await net.fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(String(city || 'Amman').slice(0, 80)))).json();
+    const p = g && g.results && g.results[0]; if (!p) return null;
+    return await (await net.fetch('https://api.open-meteo.com/v1/forecast?latitude=' + p.latitude + '&longitude=' + p.longitude + '&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto')).json();
+  } catch (err) { return null; }
+});
 ipcMain.handle('sadex-pdfjob', async (e, job) => {
   const dir = path.join(app.getPath('temp'), 'sadex-pdf-' + Date.now());
   try {

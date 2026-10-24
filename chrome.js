@@ -41,6 +41,8 @@ module.exports.js = `(function(){
   // Files from the SADEX page (Word, PDF, print) are saved by the desktop app itself, so no hidden Claude prompt is needed.
   addEventListener('message',function(e){var m=e.data;if(!m||!m.sadexDesk||!window.sadexDesktop||!e.source)return;
     if(e.source===window||!/^https:\\/\\//i.test(e.origin))return;
+    if(m.sadexDesk==='weather'){if(!window.sadexDesktop.weather){e.source.postMessage({sadexAck:m.id,ok:false},'*');return}e.source.postMessage({sadexAck:m.id,ok:true},'*');
+      window.sadexDesktop.weather(String(m.city||'Amman')).then(function(d){e.source.postMessage({sadexDone:m.id,ok:!!d,data:d},'*')},function(){e.source.postMessage({sadexDone:m.id,ok:false},'*')});return}
     if(m.sadexDesk==='pdfjob'){if(!window.sadexDesktop.pdfjob){e.source.postMessage({sadexAck:m.id,ok:false},'*');return}e.source.postMessage({sadexAck:m.id,ok:true},'*');
       window.sadexDesktop.pdfjob({mode:m.mode,name:m.name,parts:m.parts}).then(function(r){e.source.postMessage({sadexDone:m.id,ok:!!(r&&r.ok),err:r&&r.err},'*')},function(x){e.source.postMessage({sadexDone:m.id,ok:false,err:String(x&&x.message||x)},'*')});return}
     window.sadexDesktop.file(String(m.sadexDesk),String(m.name||'SADEX file'),m.data).then(function(r){e.source.postMessage({sadexAck:m.id,ok:!!r},'*')},function(){e.source.postMessage({sadexAck:m.id,ok:false},'*')})});
