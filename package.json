@@ -1,7 +1,7 @@
 {
   "name": "sadex-desktop",
   "productName": "SADEX",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "SADEX \u2014 Formulas. Standards. Control. Desktop window for the live SADEX app.",
   "author": "Ahmed Saadeh",
   "main": "main.js",

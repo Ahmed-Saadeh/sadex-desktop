@@ -85,23 +85,31 @@ function handleDownloads() {
 
 
 // Self-update: new versions are built on GitHub and installed on the next restart.
-let updateAsked = false;
+let updateAsked = false, manualCheck = false;
 function checkUpdates(manual) {
   if (!app.isPackaged) { if (manual) dialog.showMessageBox(win, { message: 'Updates work in the installed app only.' }); return; }
+  if (manual) manualCheck = true;
   autoUpdater.checkForUpdates().then((r) => {
-    if (manual && (!r || !r.updateInfo || r.updateInfo.version === app.getVersion())) dialog.showMessageBox(win, { type: 'info', message: 'SADEX Desktop is up to date (version ' + app.getVersion() + ').' });
-  }).catch((e) => { if (manual) dialog.showMessageBox(win, { type: 'warning', message: 'Could not check for updates.', detail: String(e && e.message || e) }); });
+    if (manual && (!r || !r.updateInfo || r.updateInfo.version === app.getVersion())) { manualCheck = false; dialog.showMessageBox(win, { type: 'info', message: 'SADEX Desktop is up to date (version ' + app.getVersion() + ').', detail: 'The SADEX app inside the window always loads the newest version from Claude.' }); }
+  }).catch((e) => { if (manual) { manualCheck = false; dialog.showMessageBox(win, { type: 'warning', message: 'Could not check for updates.', detail: String(e && e.message || e) + '\n\nCheck the internet connection, or download the newest installer from github.com/Ahmed-Saadeh/sadex-desktop/releases' }); } });
 }
 function setupUpdates() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('update-downloaded', async (info) => {
+    if (win) { win.setProgressBar(-1); win.setTitle('SADEX'); }
     if (updateAsked) return; updateAsked = true;
     const r = await dialog.showMessageBox(win, { type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1,
       message: 'A new version of SADEX Desktop (' + info.version + ') is ready.', detail: 'Restart now to update, or it will install the next time you close SADEX.' });
-    if (r.response === 0) autoUpdater.quitAndInstall();
+    if (r.response === 0) setImmediate(() => autoUpdater.quitAndInstall(false, true));
   });
-  autoUpdater.on('error', () => {});
+  autoUpdater.on('update-available', (info) => {
+    if (win) win.setTitle('SADEX — downloading update ' + info.version + '…');
+    if (manualCheck) dialog.showMessageBox(win, { type: 'info', message: 'Version ' + info.version + ' found — downloading now.', detail: 'You can keep working. SADEX will ask to restart when it is ready.' });
+    manualCheck = false;
+  });
+  autoUpdater.on('download-progress', (p) => { if (win) win.setProgressBar(Math.max(0, Math.min(1, (p.percent || 0) / 100))); });
+  autoUpdater.on('error', (e) => { if (win) { win.setProgressBar(-1); win.setTitle('SADEX'); } if (manualCheck) { manualCheck = false; dialog.showMessageBox(win, { type: 'warning', message: 'The update could not be downloaded.', detail: String(e && e.message || e) }); } });
   checkUpdates(false);
   setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
 }
