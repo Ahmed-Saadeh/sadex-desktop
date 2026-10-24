@@ -36,6 +36,24 @@ function createWindow() {
   const dress = () => { const wc = win.webContents; const u = wc.getURL();
     if (!/^https:\/\/([a-z0-9-]+\.)*claude\.ai\//i.test(u)) return;
     wc.insertCSS(CHROME.css).catch(() => {}); wc.executeJavaScript(CHROME.js).catch(() => {}); };
+  // Claude shows the artifact inside a wrapper frame that has its own toolbar strip. Make the SADEX frame fill that wrapper
+  // too (only while SADEX is in full-window mode), so nothing of Claude's page shows between the title bar and SADEX.
+  const INNER = (on) => `(function(on){var R=document.documentElement;if(document.getElementById('app-data'))return 'sadex';
+    if(!document.getElementById('sx-in-css')){var s=document.createElement('style');s.id='sx-in-css';s.textContent='html.sx-in,html.sx-in body{background:#0a1730!important;overflow:hidden!important}html.sx-in body *{visibility:hidden!important}html.sx-in .sx-anc,html.sx-in iframe.sx-art2{visibility:visible!important}html.sx-in .sx-anc{transform:none!important;filter:none!important;contain:none!important;will-change:auto!important;perspective:none!important;backdrop-filter:none!important;clip-path:none!important}html.sx-in iframe.sx-art2{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;border:0!important;border-radius:0!important;transform:none!important;z-index:2147483647!important}';(document.head||R).appendChild(s)}
+    var best=null,ba=0;document.querySelectorAll('iframe').forEach(function(f){var r=f.getBoundingClientRect(),a=r.width*r.height;if(f.classList.contains('sx-art2'))a=Math.max(a,innerWidth*innerHeight);if(a>ba){ba=a;best=f}});
+    document.querySelectorAll('iframe.sx-art2').forEach(function(f){if(f!==best)f.classList.remove('sx-art2')});
+    var ok=on&&best&&ba>innerWidth*innerHeight*0.3,anc=[];if(ok){best.classList.add('sx-art2');for(var p=best.parentElement;p&&p!==R;p=p.parentElement)anc.push(p)}
+    document.querySelectorAll('.sx-anc').forEach(function(x){if(anc.indexOf(x)<0)x.classList.remove('sx-anc')});anc.forEach(function(x){x.classList.add('sx-anc')});
+    R.classList.toggle('sx-in',!!ok);return ok?'on':'off'})(${on?'true':'false'})`;
+  const fitInner = async () => {
+    if (!win || win.isDestroyed()) return; const wc = win.webContents;
+    try {
+      const on = await wc.mainFrame.executeJavaScript("document.documentElement.classList.contains('sx-full')");
+      for (const f of wc.mainFrame.frames) { if (!/^https:\/\//i.test(f.url || '')) continue; f.executeJavaScript(INNER(on)).catch(() => {}); }
+    } catch (e) {}
+  };
+  setInterval(fitInner, 1000);
+  win.webContents.on('did-frame-finish-load', () => setTimeout(fitInner, 200));
   win.webContents.on('did-finish-load', dress);
   win.webContents.on('did-navigate-in-page', dress);
   win.webContents.on('page-title-updated', (e) => { e.preventDefault(); win.setTitle('SADEX'); });
