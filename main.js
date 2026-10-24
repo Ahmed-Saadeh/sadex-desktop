@@ -128,6 +128,51 @@ function openPreview(file, title) {
   w.webContents.on('page-title-updated', (e) => { e.preventDefault(); w.setTitle('Print preview — ' + title + '   (press Ctrl+P or the printer button to print)'); });
   w.loadURL(require('url').pathToFileURL(file).href);
 }
+// Word → PDF with Microsoft Word on this PC (exact Word layout and fonts), then join into one PDF.
+const PS_CONVERT = `param([string]$list)
+$ErrorActionPreference = 'Stop'
+$files = Get-Content -LiteralPath $list -Encoding UTF8 | Where-Object { $_ }
+$w = New-Object -ComObject Word.Application
+$w.Visible = $false; $w.DisplayAlerts = 0
+try { foreach ($f in $files) { $d = $w.Documents.Open($f, $false, $true, $false); try { $d.ExportAsFixedFormat(($f -replace '\.docx$', '.pdf'), 17) } finally { $d.Close(0) } } }
+finally { $w.Quit(); [System.Runtime.InteropServices.Marshal]::ReleaseComObject($w) | Out-Null }`;
+function wordToPdf(files) {
+  return new Promise((ok, no) => {
+    if (process.platform !== 'win32') return no(new Error('Word conversion needs Windows'));
+    const dir = path.dirname(files[0]), ps = path.join(dir, 'convert.ps1'), list = path.join(dir, 'files.txt');
+    fs.writeFileSync(ps, '\ufeff' + PS_CONVERT, 'utf8'); fs.writeFileSync(list, files.join('\r\n'), 'utf8');
+    require('child_process').execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps, '-list', list], { windowsHide: true, timeout: 10 * 60 * 1000 }, (err, so, se) => {
+      const missing = files.filter((f) => !fs.existsSync(f.replace(/\.docx$/i, '.pdf')));
+      if (missing.length) return no(new Error(/Word\.Application|80040154|class not registered/i.test(String(se) + String(err)) ? 'Microsoft Word is not installed on this PC' : 'Word could not convert ' + missing.length + ' file(s)'));
+      ok(files.map((f) => f.replace(/\.docx$/i, '.pdf')));
+    });
+  });
+}
+ipcMain.handle('sadex-pdfjob', async (e, job) => {
+  const dir = path.join(app.getPath('temp'), 'sadex-pdf-' + Date.now());
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const parts = (job && job.parts) || []; if (!parts.length) return { ok: false, err: 'Nothing to convert' };
+    const docx = [], order = [];
+    parts.forEach((p, i) => { const f = path.join(dir, ('000' + i).slice(-4) + (p.type === 'docx' ? '.docx' : '.pdf')); fs.writeFileSync(f, Buffer.from(new Uint8Array(p.data))); if (p.type === 'docx') docx.push(f); order.push(f.replace(/\.docx$/i, '.pdf')); });
+    if (docx.length) { if (win) win.setProgressBar(2); try { await wordToPdf(docx); } finally { if (win) win.setProgressBar(-1); } }
+    const { PDFDocument } = require('pdf-lib'); const out = await PDFDocument.create();
+    for (const f of order) { const src = await PDFDocument.load(fs.readFileSync(f)); const pages = await out.copyPages(src, src.getPageIndices()); pages.forEach((pg) => out.addPage(pg)); }
+    const bytes = Buffer.from(await out.save());
+    const name = String(job.name || 'SADEX').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) || 'SADEX';
+    if (job.mode === 'save') {
+      const r = await dialog.showSaveDialog(win, { title: 'Save PDF', defaultPath: path.join(app.getPath('downloads'), name + '.pdf'), filters: [{ name: 'PDF', extensions: ['pdf'] }] });
+      if (r.canceled || !r.filePath) return { ok: true };
+      fs.writeFileSync(r.filePath, bytes);
+      const q = await dialog.showMessageBox(win, { type: 'info', buttons: ['Open', 'Show in folder', 'Close'], defaultId: 0, message: 'Saved: ' + path.basename(r.filePath) });
+      if (q.response === 0) openPreview(r.filePath, path.basename(r.filePath)); else if (q.response === 1) shell.showItemInFolder(r.filePath);
+      return { ok: true };
+    }
+    const f = path.join(app.getPath('temp'), 'SADEX ' + Date.now() + ' ' + name + '.pdf'); fs.writeFileSync(f, bytes); openPreview(f, name);
+    return { ok: true };
+  } catch (err) { return { ok: false, err: (err && err.message ? err.message : String(err)) + ' — using the built-in PDF instead.' }; }
+  finally { setTimeout(() => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (x) {} }, 60000); }
+});
 ipcMain.handle('sadex-file', async (e, p) => {
   try {
     const name = String((p && p.name) || 'SADEX file').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) || 'SADEX file';
