@@ -34,5 +34,9 @@ module.exports.js = `(function(){
     var ok=best&&ba>vw*vh*0.35;if(ok)best.classList.add('sx-art');
     document.documentElement.classList.toggle('sx-full',!!(ok&&full));
     var t=document.getElementById('sx-tools');if(t){t.hidden=!ok;t.setAttribute('aria-pressed',String(!full))}}
+  // Files from the SADEX page (Word, PDF, print) are saved by the desktop app itself, so no hidden Claude prompt is needed.
+  addEventListener('message',function(e){var m=e.data;if(!m||!m.sadexDesk||!window.sadexDesktop||!e.source)return;
+    if(!/^https:\\/\\/([a-z0-9-]+\\.)*(claudeusercontent\\.com|claude\\.ai)$/i.test(e.origin))return;
+    window.sadexDesktop.file(String(m.sadexDesk),String(m.name||'SADEX file'),m.data).then(function(r){e.source.postMessage({sadexAck:m.id,ok:!!r},'*')},function(){e.source.postMessage({sadexAck:m.id,ok:false},'*')})});
   bar();apply();setInterval(function(){bar();apply()},700);addEventListener('resize',apply);
 })();`;

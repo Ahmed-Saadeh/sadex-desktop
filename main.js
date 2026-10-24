@@ -122,6 +122,25 @@ function setupUpdates() {
   setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
 }
 
+// Save / print files sent by the SADEX page.
+function openPreview(file, title) {
+  const w = new BrowserWindow({ width: 1000, height: 900, title: 'Print preview — ' + title, icon: path.join(__dirname, 'build', 'icon.png'), autoHideMenuBar: true, webPreferences: { plugins: true, sandbox: true, contextIsolation: true } });
+  w.webContents.on('page-title-updated', (e) => { e.preventDefault(); w.setTitle('Print preview — ' + title + '   (press Ctrl+P or the printer button to print)'); });
+  w.loadURL(require('url').pathToFileURL(file).href);
+}
+ipcMain.handle('sadex-file', async (e, p) => {
+  try {
+    const name = String((p && p.name) || 'SADEX file').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) || 'SADEX file';
+    const buf = Buffer.from(new Uint8Array(p.data));
+    if (p.kind === 'print') { const f = path.join(app.getPath('temp'), 'SADEX ' + Date.now() + ' ' + name); fs.writeFileSync(f, buf); openPreview(f, name.replace(/^Print - /, '').replace(/\.pdf$/i, '')); return true; }
+    const r = await dialog.showSaveDialog(win, { title: 'Save file', defaultPath: path.join(app.getPath('downloads'), name) });
+    if (r.canceled || !r.filePath) return true;
+    fs.writeFileSync(r.filePath, buf);
+    if (/\.pdf$/i.test(r.filePath)) { const q = await dialog.showMessageBox(win, { type: 'info', buttons: ['Open', 'Show in folder', 'Close'], defaultId: 0, message: 'Saved: ' + path.basename(r.filePath) }); if (q.response === 0) openPreview(r.filePath, path.basename(r.filePath)); else if (q.response === 1) shell.showItemInFolder(r.filePath); }
+    else shell.showItemInFolder(r.filePath);
+    return true;
+  } catch (err) { dialog.showErrorBox('SADEX', 'Could not save the file: ' + (err && err.message)); return false; }
+});
 ipcMain.on('sadex-menu', (e, p) => { const m = Menu.getApplicationMenu(); if (!m || !win) return;
   Menu.buildFromTemplate(m.items.map((i) => ({ label: i.label, submenu: i.submenu }))).popup({ window: win, x: p && p.x || 0, y: p && p.y || 30 }); });
 
