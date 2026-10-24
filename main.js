@@ -1,7 +1,8 @@
 // SADEX Desktop — opens the live SADEX app in its own window.
 // The app itself is loaded from Claude every time, so every update published
 // to SADEX appears here automatically. Nothing needs reinstalling.
-const { app, BrowserWindow, Menu, shell, dialog, session, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, session, nativeTheme, ipcMain } = require('electron');
+const CHROME = require('./chrome');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -24,12 +25,19 @@ function createWindow() {
   const st = loadState();
   win = new BrowserWindow({
     x: st.x, y: st.y, width: st.width || 1360, height: st.height || 860, minWidth: 420, minHeight: 500,
-    title: 'SADEX', icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#ffffff', show: false,
-    webPreferences: { partition: PARTITION, contextIsolation: true, sandbox: true, spellcheck: true }
+    title: 'SADEX', icon: path.join(__dirname, 'build', 'icon.png'), backgroundColor: '#0a1730', show: false,
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#0a1730', symbolColor: '#e6eefc', height: 30 },
+    webPreferences: { partition: PARTITION, contextIsolation: true, sandbox: true, spellcheck: true, preload: path.join(__dirname, 'preload.js') }
   });
   if (st.max) win.maximize();
   win.once('ready-to-show', () => win.show());
   win.on('close', saveState);
+  // Slim SADEX bar + full-window SADEX view, re-applied on every page load.
+  const dress = () => { const wc = win.webContents; const u = wc.getURL();
+    if (!/^https:\/\/([a-z0-9-]+\.)*claude\.ai\//i.test(u)) return;
+    wc.insertCSS(CHROME.css).catch(() => {}); wc.executeJavaScript(CHROME.js).catch(() => {}); };
+  win.webContents.on('did-finish-load', dress);
+  win.webContents.on('did-navigate-in-page', dress);
   win.webContents.on('page-title-updated', (e) => { e.preventDefault(); win.setTitle('SADEX'); });
 
   // Links: Claude pages stay here, other websites open in the normal browser.
@@ -43,7 +51,7 @@ function createWindow() {
   win.webContents.on('did-fail-load', (e, code, desc, url, isMain) => {
     if (!isMain || code === -3) return;
     win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-      '<body style="background:#ffffff;color:#14223a;font:15px system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center;max-width:420px">' +
+      '<body style="background:#0a1730;color:#e6eefc;font:15px system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center;max-width:420px">' +
       '<h2>SADEX can\'t reach Claude</h2><p>Check the internet connection, then press <b>Ctrl+R</b> or the button below.</p>' +
       '<button onclick="location.href=\'' + SADEX_URL + '\'" style="padding:10px 18px;border-radius:99px;border:0;background:#2db6fb;color:#06121f;font-weight:600;cursor:pointer">Try again</button></div></body>'));
   });
@@ -114,9 +122,12 @@ function setupUpdates() {
   setInterval(() => checkUpdates(false), 6 * 60 * 60 * 1000);
 }
 
+ipcMain.on('sadex-menu', (e, p) => { const m = Menu.getApplicationMenu(); if (!m || !win) return;
+  Menu.buildFromTemplate(m.items.map((i) => ({ label: i.label, submenu: i.submenu }))).popup({ window: win, x: p && p.x || 0, y: p && p.y || 30 }); });
+
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 else {
   app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.whenReady().then(() => { nativeTheme.themeSource = 'light'; buildMenu(); handleDownloads(); createWindow(); setupUpdates(); });
+  app.whenReady().then(() => { nativeTheme.themeSource = 'dark'; buildMenu(); handleDownloads(); createWindow(); setupUpdates(); });
   app.on('window-all-closed', () => app.quit());
 }
