@@ -230,7 +230,8 @@ function openPreview(file, title) {
     { label: 'Close', accelerator: 'Esc', click: () => w.close() }
   ]));
   w.webContents.on('page-title-updated', (e) => { e.preventDefault(); w.setTitle('Print preview — ' + title); });
-  w.webContents.on('render-process-gone', (e, d) => { log('preview stopped:', d.reason); if (!w.isDestroyed() && d.reason !== 'clean-exit') w.loadURL(require('url').pathToFileURL(file).href); });
+  let reloaded = false; // one retry only, so a file that always crashes the viewer can't loop
+  w.webContents.on('render-process-gone', (e, d) => { log('preview stopped:', d.reason); if (!reloaded && !w.isDestroyed() && d.reason !== 'clean-exit') { reloaded = true; w.loadURL(require('url').pathToFileURL(file).href); } });
   w.loadURL(require('url').pathToFileURL(file).href);
   return w;
 }
@@ -303,10 +304,12 @@ ipcMain.handle('sadex-file', async (e, p) => {
     const name = String((p && p.name) || 'SADEX file').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) || 'SADEX file';
     if (!p || !p.data || !p.data.byteLength) throw new Error('the file arrived empty');
     const buf = Buffer.from(new Uint8Array(p.data));
-    if (p.kind === 'print') { const f = path.join(app.getPath('temp'), 'SADEX ' + Date.now() + ' ' + name); fs.writeFileSync(f, buf); openPreview(f, name.replace(/^Print - /, '').replace(/\.pdf$/i, '')); return true; }
+    if (p.kind === 'print') { const f = path.join(app.getPath('temp'), 'SADEX ' + Date.now() + ' ' + name.replace(/\.pdf$/i, '') + '.pdf'); fs.writeFileSync(f, buf); openPreview(f, name.replace(/^Print - /, '').replace(/\.pdf$/i, '')); return true; }
     const r = await dialog.showSaveDialog(win, { title: 'Save file', defaultPath: path.join(app.getPath('downloads'), name) });
     if (r.canceled || !r.filePath) return true;
     fs.writeFileSync(r.filePath, buf);
+    // "Open" is offered only for document types, so a saved file can never be run as a program.
+    if (!/\.(pdf|xlsx|xls|csv|docx|doc|txt|json|png|jpe?g)$/i.test(r.filePath)) { shell.showItemInFolder(r.filePath); return true; }
     const q = await dialog.showMessageBox(win, { type: 'info', buttons: ['Open', 'Show in folder', 'Close'], defaultId: 0, cancelId: 2, message: 'Saved: ' + path.basename(r.filePath) });
     if (q.response === 0) { if (/\.pdf$/i.test(r.filePath)) openPreview(r.filePath, path.basename(r.filePath)); else { const err = await shell.openPath(r.filePath); if (err) dialog.showErrorBox('SADEX', 'Could not open the file: ' + err); } }
     else if (q.response === 1) shell.showItemInFolder(r.filePath);
