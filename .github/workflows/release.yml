@@ -4,7 +4,7 @@ name: Build SADEX Desktop
 on:
   push:
     branches: [main]
-    paths: [package.json, main.js, build/**, .github/workflows/release.yml]
+    paths: [package.json, main.js, preload.js, chrome.js, build/**, .github/workflows/release.yml]
   workflow_dispatch:
 permissions:
   contents: write
