@@ -45,6 +45,11 @@ module.exports.js = `(function(){
       window.sadexDesktop.weather(String(m.city||'Amman')).then(function(d){e.source.postMessage({sadexDone:m.id,ok:!!d,data:d},'*')},function(){e.source.postMessage({sadexDone:m.id,ok:false},'*')});return}
     if(m.sadexDesk==='pdfjob'){if(!window.sadexDesktop.pdfjob){e.source.postMessage({sadexAck:m.id,ok:false},'*');return}e.source.postMessage({sadexAck:m.id,ok:true},'*');
       window.sadexDesktop.pdfjob({mode:m.mode,name:m.name,parts:m.parts}).then(function(r){e.source.postMessage({sadexDone:m.id,ok:!!(r&&r.ok),err:r&&r.err},'*')},function(x){e.source.postMessage({sadexDone:m.id,ok:false,err:String(x&&x.message||x)},'*')});return}
-    window.sadexDesktop.file(String(m.sadexDesk),String(m.name||'SADEX file'),m.data).then(function(r){e.source.postMessage({sadexAck:m.id,ok:!!r},'*')},function(){e.source.postMessage({sadexAck:m.id,ok:false},'*')})});
-  bar();apply();setInterval(function(){bar();apply()},700);addEventListener('resize',apply);
+    // Answer straight away: the page gives up after 2.5 s, and the Save window stays open longer than that.
+    // Problems after this point (a full disk, a file open in Excel) are shown by the desktop app itself.
+    if(!m.data||!m.data.byteLength){e.source.postMessage({sadexAck:m.id,ok:false},'*');return}
+    // The hand-over to the desktop app waits a moment so the answer reaches the page first, even for big files.
+    e.source.postMessage({sadexAck:m.id,ok:true},'*');
+    setTimeout(function(){window.sadexDesktop.file(String(m.sadexDesk),String(m.name||'SADEX file'),m.data).catch(function(){})},30)});
+  bar();apply();setInterval(function(){if(!document.hidden){bar();apply()}},1000);addEventListener('resize',apply);document.addEventListener('visibilitychange',function(){if(!document.hidden)apply()});
 })();`;

@@ -1,7 +1,7 @@
 {
   "name": "sadex-desktop",
   "productName": "SADEX",
-  "version": "1.4.4",
+  "version": "1.5.0",
   "description": "SADEX \u2014 Formulas. Standards. Control. Desktop window for the live SADEX app.",
   "author": "Ahmed Saadeh",
   "main": "main.js",
@@ -11,7 +11,7 @@
     "release": "electron-builder --win nsis --x64 --publish always"
   },
   "devDependencies": {
-    "electron": "33.2.0",
+    "electron": "44.7.0",
     "electron-builder": "25.1.8"
   },
   "build": {
