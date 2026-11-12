@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
-const SADEX_URL = 'https://claude.ai/artifact/DMze2Cz16YQRegMRCMWPBC';
+const SADEX_URL = 'https://claude.ai/artifact/8zGgCiSZBAZD9cjjAnfTGX';
 const PARTITION = 'persist:sadex'; // keeps the Claude sign-in between launches
 
 // Pages that stay inside the SADEX window; everything else opens in the normal browser.

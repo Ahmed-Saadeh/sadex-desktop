@@ -55,7 +55,7 @@ import java.net.URL;
 import java.util.Collections;
 
 public class MainActivity extends Activity {
-  static final String HOME = "https://claude.ai/artifact/DMze2Cz16YQRegMRCMWPBC";
+  static final String HOME = "https://claude.ai/artifact/8zGgCiSZBAZD9cjjAnfTGX";
   WebView web, popup;
   FrameLayout root;
   String lastClip = "";
